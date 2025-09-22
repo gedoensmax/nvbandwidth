@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES all) #89
 
 if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL "13.0")
     # 5.2 architecture not supported since CUDA 13.0
@@ -26,16 +27,12 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    file(READ "/etc/os-release" OS_RELEASE_CONTENT)
-    # Skip static libs on Fedora - https://github.com/NVIDIA/nvbandwidth/issues/4
-    if(NOT OS_RELEASE_CONTENT MATCHES "ID=.*fedora")
-        set(Boost_USE_STATIC_LIBS ON)
-    endif()
-else()
-    set(Boost_USE_STATIC_LIBS ON)
-endif()
-find_package(Boost COMPONENTS program_options REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+        argparse
+        GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+)
+FetchContent_MakeAvailable(argparse)
 
 set(src
     testcase.cpp
@@ -61,13 +58,14 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGIT_VERSION=\\\"\"${GIT_VERSION}\"\\\"
 
 if(WIN32)
     set(NVML_LIB_NAME "nvml")
+    add_compile_definitions("_CRT_SECURE_NO_WARNINGS" "1")
 else()
     set(NVML_LIB_NAME "nvidia-ml")
 endif()
 
 add_executable(nvbandwidth ${src})
 target_include_directories(nvbandwidth PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES} .)
-target_link_libraries(nvbandwidth Boost::program_options ${NVML_LIB_NAME} cuda)
+target_link_libraries(nvbandwidth argparse ${NVML_LIB_NAME} cuda)
 
 if (MULTINODE)
     find_package(MPI REQUIRED)

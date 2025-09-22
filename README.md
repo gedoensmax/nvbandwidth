@@ -13,29 +13,9 @@ Install a compiler package which supports c++17. GCC 7.x or above is a possible 
 Install cmake (version 3.20 or above).
 Cmake version 3.24 or newer is encouraged.
 
-Install Boost program options library (More details in the next section)
-
 Ensure that path to nvcc binary (install via toolkit) is available in the $PATH variable on linux systems
 In order to run nvbandwidth, the system should have a CUDA enabled GPU and an NVIDIA display driver that is compatible with the CUDA Toolkit being used to build nvbandwidth.
 For more information, refer to https://docs.nvidia.com/deploy/cuda-compatibility/
-
-## Dependencies
-To build and run nvbandwidth please install the Boost program_options library (https://www.boost.org/doc/libs/1_66_0/doc/html/program_options.html).
-
-Ubuntu/Debian users can run the following to install:
-```
-apt install libboost-program-options-dev
-```
-On Ubuntu/Debian, we have provided a utility script (debian_install.sh) which installs some generic software components needed for the build.
-The script also builds the nvbandwidth project.
-```
-sudo ./debian_install.sh
-```
-
-Fedora users can run the following to install:
-```
-sudo dnf -y install boost-devel
-```
 
 ## Build
 To build the `nvbandwidth` executable for single-node:
@@ -43,7 +23,6 @@ To build the `nvbandwidth` executable for single-node:
 cmake .
 make
 ```
-You may need to set the BOOST_ROOT environment variable on Windows to tell CMake where to find your Boost installation.
 
 ## Usage:
 ```

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include <boost/program_options.hpp>
+#include <argparse/argparse.hpp>
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #include <nvml.h>
@@ -31,8 +31,6 @@
 #include "testcase.h"
 #include "version.h"
 #include "inline_common.h"
-
-namespace opt = boost::program_options;
 
 int deviceCount;
 unsigned int averageLoopCount;
@@ -203,67 +201,105 @@ int main(int argc, char **argv) {
 #endif
 
     // Args parsing
-    opt::options_description visible_opts("nvbandwidth CLI");
-    visible_opts.add_options()
-        ("help,h", "Produce help message")
-        ("bufferSize,b", opt::value<unsigned long long int>(&bufferSize)->default_value(defaultBufferSize), "Memcpy buffer size in MiB")
-        ("list,l", "List available testcases")
-        ("testcase,t", opt::value<std::vector<std::string>>(&testcasesToRun)->multitoken(), "Testcase(s) to run (by name or index)")
-        ("testcasePrefixes,p", opt::value<std::vector<std::string>>(&testcasePrefixes)->multitoken(), "Testcase(s) to run (by prefix))")
-        ("verbose,v", opt::bool_switch(&verbose)->default_value(false), "Verbose output")
-        ("skipVerification,s", opt::bool_switch(&skipVerification)->default_value(false), "Skips data verification after copy")
-        ("disableAffinity,d", opt::bool_switch(&disableAffinity)->default_value(false), "Disable automatic CPU affinity control")
-        ("testSamples,i", opt::value<unsigned int>(&averageLoopCount)->default_value(defaultAverageLoopCount), "Iterations of the benchmark")
-        ("useMean,m", opt::bool_switch(&useMean)->default_value(false), "Use mean instead of median for results")
-        ("json,j", opt::bool_switch(&jsonOutput)->default_value(false), "Print output in json format instead of plain text.");
+    argparse::ArgumentParser program("nvbandwidth");
+    program.add_argument("-h", "--help")
+        .help("Produce help message")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-b", "--bufferSize")
+        .help("Memcpy buffer size in MiB")
+        .default_value(std::to_string(defaultBufferSize));
+    program.add_argument("-l", "--list")
+        .help("List available testcases")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-t", "--testcase")
+        .help("Testcase(s) to run (by name or index)")
+        .nargs(argparse::nargs_pattern::any);
+    program.add_argument("-p", "--testcasePrefixes")
+        .help("Testcase(s) to run (by prefix)")
+        .nargs(argparse::nargs_pattern::any);
+    program.add_argument("-v", "--verbose")
+        .help("Verbose output")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-s", "--skipVerification")
+        .help("Skips data verification after copy")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-d", "--disableAffinity")
+        .help("Disable automatic CPU affinity control")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-i", "--testSamples")
+        .help("Iterations of the benchmark")
+        .default_value(std::to_string(defaultAverageLoopCount));
+    program.add_argument("-m", "--useMean")
+        .help("Use mean instead of median for results")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("-j", "--json")
+        .help("Print output in json format instead of plain text.")
+        .default_value(false)
+        .implicit_value(true);
+    program.add_argument("--loopCount")
+        .help("Iterations of memcpy to be performed within a test sample")
+        .default_value(std::to_string(defaultLoopCount));
+    program.add_argument("--perfFormatter")
+        .help("Use perf formatter prefix (&&&& PERF) in output")
+        .default_value(false)
+        .implicit_value(true);
 
-    opt::options_description all_opts("");
-    all_opts.add(visible_opts);
-    all_opts.add_options()
-        ("loopCount", opt::value<unsigned long long int>(&loopCount)->default_value(defaultLoopCount), "Iterations of memcpy to be performed within a test sample")
-        ("perfFormatter", opt::bool_switch(&perfFormatter)->default_value(false), "Use perf formatter prefix (&&&& PERF) in output");
-
-    opt::variables_map vm;
     try {
-        opt::store(opt::parse_command_line(argc, argv, all_opts), vm);
-        opt::notify(vm);
-    } catch (...) {
+        program.parse_args(argc, argv);
+    } catch (const std::exception& err) {
         output->addVersionInfo();
-
         std::stringstream errmsg;
-        errmsg << "ERROR: Invalid Arguments " << std::endl;
-        for (int i = 0; i < argc; i++) {
-            errmsg << argv[i] << " ";
-        }
-        std::vector<std::string> messageParts;
-        std::stringstream buf;
-        buf << visible_opts;
-        messageParts.emplace_back(errmsg.str());
-        messageParts.emplace_back(buf.str());
-        output->recordError(messageParts);
+        errmsg << "Error parsing command line: " << err.what();
+        output->recordError(errmsg.str());
+        output->print();
         return 1;
     }
 
-    if (jsonOutput) {
-        delete output;
-        output = new JsonOutput(shouldOutput);
+    if (program.get<bool>("--help")) {
+        std::cout << program << std::endl;
+        return 0;
+    }
+
+    // Assign parsed values to variables
+    bufferSize = std::stoull(program.get<std::string>("--bufferSize"));
+    verbose = program.get<bool>("--verbose");
+    skipVerification = program.get<bool>("--skipVerification");
+    disableAffinity = program.get<bool>("--disableAffinity");
+    useMean = program.get<bool>("--useMean");
+    perfFormatter = program.get<bool>("--perfFormatter");
+    jsonOutput = program.get<bool>("--json");
+    averageLoopCount = std::stoul(program.get<std::string>("--testSamples"));
+    loopCount = std::stoull(program.get<std::string>("--loopCount"));
+    // Handle multi-token arguments
+    if (program.is_used("--testcase")) {
+        testcasesToRun = program.get<std::vector<std::string>>("--testcase");
+    }
+    if (program.is_used("--testcasePrefixes")) {
+        testcasePrefixes = program.get<std::vector<std::string>>("--testcasePrefixes");
     }
 
     output->addVersionInfo();
 
-    if (vm.count("help")) {
-        OUTPUT << visible_opts << "\n";
-        return 0;
-    }
+    bufferSize = program.get<unsigned long long>("--bufferSize");
+    loopCount = program.get<unsigned long long>("--loopCount");
+    verbose = program.get<bool>("--verbose");
+    disableAffinity = program.get<bool>("--disableAffinity");
+    testcasesToRun = program.get<std::vector<std::string>>("--testcase");
 
-    if (vm.count("list")) {
+    if (program.get<bool>("--list")) {
         output->listTestcases(testcases);
         return 0;
     }
 
     if (testcasePrefixes.size() != 0 && testcasesToRun.size() != 0) {
         output->recordError("You cannot specify both testcase and testcasePrefix options at the same time");
-        return 1;
+              return 1;
     }
 
 
