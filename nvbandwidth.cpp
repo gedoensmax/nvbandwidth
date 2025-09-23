@@ -286,12 +286,6 @@ int main(int argc, char **argv) {
 
     output->addVersionInfo();
 
-    bufferSize = program.get<unsigned long long>("--bufferSize");
-    loopCount = program.get<unsigned long long>("--loopCount");
-    verbose = program.get<bool>("--verbose");
-    disableAffinity = program.get<bool>("--disableAffinity");
-    testcasesToRun = program.get<std::vector<std::string>>("--testcase");
-
     if (program.get<bool>("--list")) {
         output->listTestcases(testcases);
         return 0;
